@@ -4,403 +4,836 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SBV2 → AIVMX 変換ツール</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%234f8eff'/%3E%3Cstop offset='100%25' stop-color='%23a855f7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M8 10 L16 6 L24 10 L24 18 Q24 24 16 27 Q8 24 8 18 Z' fill='white' opacity='0.9'/%3E%3C/svg%3E">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg: #080b14;
+      --surface: #0d1120;
+      --surface2: #131929;
+      --border: #1e2d4a;
+      --accent: #4f8eff;
+      --accent2: #a855f7;
+      --text: #e8edf8;
+      --text-muted: #5a6a8a;
+      --success: #22d3a0;
+      --error: #ff4f6a;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
-      background: #f5f5f7;
-      color: #1d1d1f;
+      font-family: 'Noto Sans JP', sans-serif;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
-      padding: 24px 16px 48px;
+      overflow-x: hidden;
     }
 
-    header {
-      text-align: center;
-      margin-bottom: 32px;
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(79,142,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,142,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
       position: relative;
+      z-index: 1;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 5rem;
     }
-    header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
-    header p { margin-top: 6px; font-size: 13px; color: #6e6e73; }
 
-    .settings-btn {
-      position: absolute;
-      right: 0;
-      top: 0;
-      background: none;
-      border: 1.5px solid #d2d2d7;
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-size: 13px;
-      cursor: pointer;
-      color: #3a3a3c;
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 2.8rem;
+      animation: fadeDown 0.5s ease both;
     }
-    .settings-btn:hover { background: #f2f2f7; }
+
+    .header-left {}
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.55rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 300;
+      margin-left: calc(38px + 0.75rem);
+    }
+
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
 
     .api-status {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
-      color: #6e6e73;
-      margin-top: 8px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-family: 'Syne', sans-serif;
     }
+
     .api-status .dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #c7c7cc;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--border);
+      flex-shrink: 0;
     }
-    .api-status.ok .dot { background: #34c759; }
-    .api-status.error .dot { background: #ff3b30; }
 
-    /* Modal */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.4);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-    }
-    .modal-overlay.visible { display: flex; }
-    .modal {
-      background: #fff;
-      border-radius: 16px;
-      padding: 28px;
-      width: 100%;
-      max-width: 440px;
-      margin: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-    }
-    .modal h2 { font-size: 17px; margin-bottom: 20px; }
+    .api-status.ok .dot { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    .api-status.err .dot { background: var(--error); }
 
-    .card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 24px;
-      margin: 0 auto 20px;
-      max-width: 680px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-    .card h2 {
-      font-size: 15px;
+    .settings-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.45rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: 'Syne', sans-serif;
       font-weight: 600;
-      color: #6e6e73;
+      letter-spacing: 0.03em;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .settings-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.6rem;
+      margin-bottom: 1rem;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    .card:nth-child(1) { animation-delay: 0.05s; }
+    .card:nth-child(2) { animation-delay: 0.1s; }
+    .card:nth-child(3) { animation-delay: 0.15s; }
+    .card:nth-child(4) { animation-delay: 0.2s; }
+
+    .card-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 16px;
+      letter-spacing: 0.1em;
+      margin-bottom: 1.1rem;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 0.5rem;
     }
-    .card h2 .step-num {
-      background: #0071e3;
-      color: #fff;
+
+    .step-badge {
+      width: 20px; height: 20px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
       border-radius: 50%;
-      width: 22px; height: 22px;
-      font-size: 12px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
     }
+
+    /* ── Form fields ── */
+    .field { margin-bottom: 1rem; }
+    .field:last-child { margin-bottom: 0; }
 
     label {
       display: block;
-      font-size: 13px;
-      font-weight: 500;
-      color: #3a3a3c;
-      margin-bottom: 6px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      font-weight: 400;
     }
-    label .required { color: #ff3b30; margin-left: 2px; }
-    label .hint { font-weight: 400; color: #8e8e93; font-size: 12px; margin-left: 4px; }
+
+    label .required { color: var(--error); margin-left: 2px; }
+    label .hint { font-weight: 300; font-size: 0.72rem; margin-left: 4px; opacity: 0.7; }
 
     input[type="text"], input[type="password"], input[type="url"], textarea, select {
       width: 100%;
-      border: 1.5px solid #d2d2d7;
+      padding: 0.75rem 1rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 10px 12px;
-      font-size: 14px;
-      font-family: inherit;
-      background: #fafafa;
-      transition: border-color 0.15s;
+      color: var(--text);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 0.88rem;
+      transition: border-color 0.2s;
       outline: none;
     }
-    input:focus, textarea:focus, select:focus {
-      border-color: #0071e3;
-      background: #fff;
-    }
-    textarea { resize: vertical; min-height: 64px; }
-    .field { margin-bottom: 16px; }
-    .field:last-child { margin-bottom: 0; }
 
-    .model-info {
-      background: #f0f7ff;
-      border: 1px solid #b3d4ff;
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 13px;
-      margin-top: 10px;
-      display: none;
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
+    textarea { resize: vertical; min-height: 72px; line-height: 1.6; }
+
+    select {
+      appearance: none;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a6a8a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      padding-right: 2.5rem;
     }
+
+    /* ── Searchable Combobox ── */
+    .combobox-wrap {
+      position: relative;
+    }
+
+    .combobox-input-row {
+      display: flex;
+      align-items: center;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition: border-color 0.2s;
+      overflow: hidden;
+    }
+
+    .combobox-input-row:focus-within { border-color: var(--accent); }
+
+    .combobox-icon {
+      padding: 0 0 0 0.9rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      flex-shrink: 0;
+      pointer-events: none;
+    }
+
+    .combobox-input {
+      flex: 1;
+      padding: 0.75rem 0.5rem;
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      color: var(--text);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 0.88rem;
+      outline: none !important;
+    }
+
+    .combobox-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+
+    .combobox-clear {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0 0.75rem;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s, color 0.15s;
+    }
+
+    .combobox-clear.visible { opacity: 1; pointer-events: auto; }
+    .combobox-clear:hover { color: var(--text); }
+
+    .combobox-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      max-height: 260px;
+      overflow-y: auto;
+      z-index: 50;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    .combobox-dropdown.open { display: block; }
+
+    .combobox-option {
+      padding: 0.65rem 1rem;
+      font-size: 0.86rem;
+      cursor: pointer;
+      transition: background 0.1s;
+      color: var(--text);
+      border-bottom: 1px solid rgba(30,45,74,0.4);
+    }
+
+    .combobox-option:last-child { border-bottom: none; }
+    .combobox-option:hover,
+    .combobox-option.active { background: rgba(79,142,255,0.1); color: var(--text); }
+    .combobox-option.selected { color: var(--accent); }
+
+    .combobox-option em {
+      font-style: normal;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .combobox-empty {
+      padding: 0.8rem 1rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .combobox-dropdown::-webkit-scrollbar { width: 4px; }
+    .combobox-dropdown::-webkit-scrollbar-track { background: transparent; }
+    .combobox-dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Model info badge ── */
+    .model-info {
+      margin-top: 0.7rem;
+      padding: 0.7rem 1rem;
+      background: rgba(79,142,255,0.06);
+      border: 1px solid rgba(79,142,255,0.15);
+      border-radius: 8px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: none;
+      line-height: 1.7;
+    }
+
     .model-info.visible { display: block; }
 
+    /* ── Speaker blocks ── */
     .speaker-block {
-      border: 1.5px solid #e5e5ea;
+      border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 12px;
+      padding: 1.2rem;
+      margin-bottom: 0.8rem;
+      background: rgba(13,17,32,0.4);
     }
+
     .speaker-block-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 1rem;
     }
-    .speaker-block-title { font-size: 14px; font-weight: 600; color: #3a3a3c; }
+
+    .speaker-block-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
 
     .style-row {
       display: flex;
-      gap: 8px;
+      gap: 0.5rem;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 0.5rem;
     }
-    .style-row input { flex: 1; }
-    .style-row .local-id-label { font-size: 12px; color: #8e8e93; white-space: nowrap; min-width: 48px; }
 
+    .style-row input { flex: 1; }
+
+    .local-id-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      min-width: 42px;
+      font-family: 'Syne', sans-serif;
+    }
+
+    /* ── Buttons ── */
     button {
       border: none;
       border-radius: 8px;
-      padding: 8px 14px;
-      font-size: 13px;
-      font-family: inherit;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.8rem;
+      font-family: 'Noto Sans JP', sans-serif;
       cursor: pointer;
       font-weight: 500;
-      transition: opacity 0.15s, background 0.15s;
+      transition: opacity 0.15s, background 0.15s, border-color 0.15s, color 0.15s;
     }
+
     button:active { opacity: 0.75; }
-    .btn-primary { background: #0071e3; color: #fff; }
-    .btn-primary:hover { background: #0077ed; }
-    .btn-secondary { background: #e5e5ea; color: #3a3a3c; }
-    .btn-secondary:hover { background: #d8d8de; }
-    .btn-danger { background: #fff0f0; color: #ff3b30; border: 1px solid #ffcdd0; }
-    .btn-danger:hover { background: #ffe5e5; }
-    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-ghost {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-danger {
+      background: none;
+      border: 1px solid rgba(255,79,106,0.25);
+      color: var(--error);
+      font-size: 0.72rem;
+      padding: 0.35rem 0.7rem;
+    }
+
+    .btn-danger:hover { background: rgba(255,79,106,0.1); border-color: var(--error); }
 
     .btn-add-style {
-      margin-top: 4px;
-      background: #f2f2f7;
-      color: #0071e3;
-      border: 1.5px dashed #b3d4ff;
       width: 100%;
+      margin-top: 0.3rem;
+      background: rgba(79,142,255,0.05);
+      border: 1px dashed rgba(79,142,255,0.25);
+      color: var(--accent);
+      font-size: 0.78rem;
+      padding: 0.55rem;
     }
-    .btn-add-style:hover { background: #e8f0fd; }
+
+    .btn-add-style:hover { background: rgba(79,142,255,0.1); }
+
     .btn-add-speaker {
       width: 100%;
-      margin-top: 4px;
-      background: #f2f2f7;
-      color: #0071e3;
-      border: 1.5px dashed #b3d4ff;
-      padding: 12px;
+      margin-top: 0.3rem;
+      background: rgba(79,142,255,0.05);
+      border: 1px dashed rgba(79,142,255,0.25);
+      color: var(--accent);
+      font-size: 0.82rem;
+      padding: 0.75rem;
     }
-    .btn-add-speaker:hover { background: #e8f0fd; }
 
-    .convert-area { text-align: center; max-width: 680px; margin: 0 auto; }
+    .btn-add-speaker:hover { background: rgba(79,142,255,0.1); }
+
+    /* ── Convert button ── */
+    .convert-area { margin-top: 1.5rem; animation: fadeUp 0.5s ease 0.25s both; }
+
     #convertBtn {
-      background: #0071e3;
-      color: #fff;
-      padding: 14px 40px;
-      font-size: 16px;
-      font-weight: 600;
-      border-radius: 12px;
       width: 100%;
-      max-width: 320px;
+      padding: 1rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      position: relative;
+      overflow: hidden;
+      transition: opacity 0.2s;
     }
-    #convertBtn:hover { background: #0077ed; }
-    #convertBtn:disabled { background: #c7c7cc; cursor: not-allowed; }
 
+    #convertBtn:hover { opacity: 0.9; }
+    #convertBtn:active { transform: scale(0.99); }
+    #convertBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #convertBtn.loading::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+      animation: shimmer 1.2s infinite;
+    }
+
+    /* ── Result / Error cards ── */
     .result-card {
       display: none;
-      background: #f0fff4;
-      border: 1.5px solid #a3e6b3;
-      border-radius: 16px;
-      padding: 24px;
+      margin-top: 1.2rem;
+      background: rgba(34,211,160,0.06);
+      border: 1px solid rgba(34,211,160,0.2);
+      border-radius: 14px;
+      padding: 1.5rem;
       text-align: center;
-      max-width: 680px;
-      margin: 20px auto 0;
+      animation: fadeUp 0.4s ease both;
     }
+
     .result-card.visible { display: block; }
-    .result-card h3 { font-size: 18px; margin-bottom: 8px; color: #1d6b35; }
-    .result-card p { font-size: 13px; color: #4a7c59; margin-bottom: 16px; }
-    .download-btn {
-      display: inline-block;
-      background: #34c759;
-      color: #fff;
-      padding: 12px 28px;
-      border-radius: 10px;
-      font-size: 15px;
-      font-weight: 600;
-      text-decoration: none;
+
+    .result-card h3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--success);
+      margin-bottom: 0.4rem;
     }
-    .download-btn:hover { background: #2db34a; }
+
+    .result-card p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 1.2rem;
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: linear-gradient(135deg, var(--success), #16a37c);
+      color: #fff;
+      padding: 0.75rem 1.8rem;
+      border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .download-btn:hover { opacity: 0.88; }
 
     .error-card {
       display: none;
-      background: #fff5f5;
-      border: 1.5px solid #ffcdd0;
-      border-radius: 12px;
-      padding: 16px;
-      max-width: 680px;
-      margin: 16px auto 0;
+      margin-top: 1.2rem;
+      background: rgba(255,79,106,0.06);
+      border: 1px solid rgba(255,79,106,0.2);
+      border-radius: 14px;
+      padding: 1.2rem 1.4rem;
+      animation: fadeUp 0.4s ease both;
     }
-    .error-card.visible { display: block; }
-    .error-card pre { font-size: 12px; color: #c0392b; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
 
+    .error-card.visible { display: block; }
+
+    .error-card strong {
+      font-size: 0.82rem;
+      color: var(--error);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+
+    .error-card pre {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+
+    /* ── Spinner ── */
     .spinner {
       display: inline-block;
-      width: 18px; height: 18px;
-      border: 2.5px solid rgba(255,255,255,0.4);
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
       border-top-color: #fff;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       vertical-align: middle;
-      margin-right: 6px;
+      margin-right: 0.5rem;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Not configured ── */
     .not-configured {
       text-align: center;
-      padding: 48px 24px;
-      color: #6e6e73;
+      padding: 5rem 2rem;
+      animation: fadeUp 0.5s ease both;
     }
-    .not-configured h2 { font-size: 18px; color: #1d1d1f; margin-bottom: 8px; }
-    .not-configured p { font-size: 14px; margin-bottom: 24px; }
+
+    .not-configured h2 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.6rem;
+    }
+
+    .not-configured p {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 1.8rem;
+    }
+
+    /* ── Settings Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.visible { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 420px;
+      margin: 1rem;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+      animation: fadeUp 0.3s ease both;
+    }
+
+    .modal h2 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 1.4rem;
+    }
+
+    .modal .field { margin-bottom: 1rem; }
+    .modal .field:last-of-type { margin-bottom: 0; }
+
+    .modal-actions {
+      display: flex;
+      gap: 0.6rem;
+      justify-content: flex-end;
+      margin-top: 1.5rem;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes shimmer {
+      from { transform: translateX(-100%); }
+      to   { transform: translateX(100%); }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 480px) {
+      .container { padding: 2rem 1rem 4rem; }
+      header { flex-direction: column; gap: 0.8rem; }
+      .header-right { flex-direction: row; align-items: center; }
+    }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>SBV2 → AIVMX 変換ツール</h1>
-  <p>Style-Bert-VITS2 の学習済みモデルを AivisSpeech 用の .aivmx 形式に変換します</p>
-  <div id="apiStatus" class="api-status"><span class="dot"></span><span id="apiStatusText">未接続</span></div>
-  <button class="settings-btn" onclick="openSettings()">⚙ 設定</button>
-</header>
+<div class="container">
 
-<!-- 設定モーダル -->
-<div class="modal-overlay" id="settingsModal">
-  <div class="modal">
-    <h2>⚙ API 接続設定</h2>
-    <div class="field">
-      <label>API URL <span class="required">*</span></label>
-      <input type="url" id="settingsApiUrl" placeholder="https://example.com">
+  <!-- Header -->
+  <header>
+    <div class="header-left">
+      <div class="logo">
+        <div class="logo-icon">🛡</div>
+        <h1>SBV2 → AIVMX</h1>
+      </div>
+      <div class="subtitle">Style-Bert-VITS2 学習済みモデルを AivisSpeech 用 .aivmx 形式に変換します</div>
     </div>
-    <div class="field">
-      <label>API キー <span class="required">*</span></label>
-      <input type="password" id="settingsApiKey" placeholder="your-api-key">
+    <div class="header-right">
+      <div id="apiStatus" class="api-status">
+        <span class="dot"></span>
+        <span id="apiStatusText">未接続</span>
+      </div>
+      <button class="settings-btn" onclick="openSettings()">⚙ 設定</button>
     </div>
-    <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end">
-      <button class="btn-secondary" onclick="closeSettings()">キャンセル</button>
-      <button class="btn-primary" onclick="saveSettings()">保存して接続</button>
-    </div>
-  </div>
-</div>
+  </header>
 
-<!-- 未設定メッセージ -->
-<div class="not-configured" id="notConfigured" style="display:none">
-  <h2>API 設定が必要です</h2>
-  <p>右上の「⚙ 設定」から API URL と API キーを設定してください。</p>
-  <button class="btn-primary" onclick="openSettings()">設定を開く</button>
-</div>
-
-<!-- メインUI -->
-<div id="mainUI" style="display:none">
-
-  <!-- Step 1 -->
-  <div class="card">
-    <h2><span class="step-num">1</span> モデルを選択</h2>
-    <div class="field">
-      <label>SBV2 モデル</label>
-      <select id="modelSelect" onchange="onModelSelect()">
-        <option value="">読み込み中...</option>
-      </select>
-      <div class="model-info" id="modelInfo"></div>
+  <!-- 設定モーダル -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <h2>⚙ API 接続設定</h2>
+      <div class="field">
+        <label>API URL <span class="required">*</span></label>
+        <input type="url" id="settingsApiUrl" placeholder="https://example.com">
+      </div>
+      <div class="field">
+        <label>API キー <span class="required">*</span></label>
+        <input type="password" id="settingsApiKey" placeholder="your-api-key">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeSettings()">キャンセル</button>
+        <button class="btn-primary" onclick="saveSettings()">保存して接続</button>
+      </div>
     </div>
   </div>
 
-  <!-- Step 2 -->
-  <div class="card">
-    <h2><span class="step-num">2</span> メタデータを入力</h2>
-    <div class="field">
-      <label>出力ファイル名 <span class="hint">（省略時はディレクトリ名・.aivmx は自動付与）</span></label>
-      <input type="text" id="outputFilename" placeholder="例: aso_male_v1">
-    </div>
-    <div class="field">
-      <label>モデル名 <span class="required">*</span> <span class="hint">（AivisSpeech 上での表示名）</span></label>
-      <input type="text" id="modelName" placeholder="例: 阿蘇男性ボイス" maxlength="80">
-    </div>
-    <div class="field">
-      <label>説明 <span class="hint">（省略可・140文字以内）</span></label>
-      <textarea id="description" maxlength="140" placeholder="モデルの説明"></textarea>
-    </div>
-    <div class="field">
-      <label>制作者 <span class="hint">（省略可・カンマ区切り）</span></label>
-      <input type="text" id="creators" placeholder="例: 山田太郎, Jane Doe">
-    </div>
-    <div class="field">
-      <label>モデルアーキテクチャ</label>
-      <select id="architecture">
-        <option value="Style-Bert-VITS2 (JP-Extra)">Style-Bert-VITS2 (JP-Extra)（日本語専用・推奨）</option>
-        <option value="Style-Bert-VITS2">Style-Bert-VITS2（日英中対応）</option>
-      </select>
-    </div>
+  <!-- 未設定 -->
+  <div class="not-configured" id="notConfigured" style="display:none">
+    <h2>API 設定が必要です</h2>
+    <p>右上の「⚙ 設定」から API URL と API キーを設定してください。</p>
+    <button class="btn-primary" onclick="openSettings()" style="padding:0.7rem 2rem;font-size:0.9rem">設定を開く</button>
   </div>
 
-  <!-- Step 3 -->
-  <div class="card">
-    <h2><span class="step-num">3</span> 話者・スタイルを設定</h2>
-    <div id="speakersContainer"></div>
-    <button class="btn-add-speaker" onclick="addSpeaker()">＋ 話者を追加</button>
-  </div>
+  <!-- メイン UI -->
+  <div id="mainUI" style="display:none">
 
-  <!-- 変換ボタン -->
-  <div class="convert-area">
-    <button id="convertBtn" onclick="doConvert()">変換する</button>
-  </div>
+    <!-- Step 1: モデル選択 -->
+    <div class="card">
+      <div class="card-title">
+        <span class="step-badge">1</span>
+        モデルを選択
+      </div>
 
-  <!-- 結果 -->
-  <div class="result-card" id="resultCard">
-    <h3>✅ 変換完了</h3>
-    <p id="resultInfo"></p>
-    <a id="downloadLink" class="download-btn" href="#">📥 .aivmx ファイルをダウンロード</a>
-  </div>
+      <div class="field" style="margin-bottom:0">
+        <label>SBV2 モデル <span class="required">*</span></label>
 
-  <div class="error-card" id="errorCard">
-    <strong>⚠️ エラーが発生しました</strong>
-    <pre id="errorMsg"></pre>
-  </div>
+        <!-- Searchable combobox -->
+        <div class="combobox-wrap" id="comboboxWrap">
+          <div class="combobox-input-row">
+            <span class="combobox-icon">🔍</span>
+            <input
+              type="text"
+              class="combobox-input"
+              id="comboboxInput"
+              placeholder="モデルを検索・選択..."
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
+              oninput="onComboInput()"
+              onfocus="onComboFocus()"
+              onkeydown="onComboKeyDown(event)"
+            >
+            <button class="combobox-clear" id="comboClear" onclick="clearCombo()" title="クリア">✕</button>
+          </div>
+          <div class="combobox-dropdown" id="comboDropdown"></div>
+        </div>
 
-</div><!-- #mainUI -->
+        <div class="model-info" id="modelInfo"></div>
+      </div>
+    </div>
+
+    <!-- Step 2: メタデータ -->
+    <div class="card">
+      <div class="card-title">
+        <span class="step-badge">2</span>
+        メタデータを入力
+      </div>
+
+      <div class="field">
+        <label>出力ファイル名 <span class="hint">（省略時はモデルディレクトリ名・.aivmx は自動付与）</span></label>
+        <input type="text" id="outputFilename" placeholder="例: aso_male_v1">
+      </div>
+      <div class="field">
+        <label>モデル名 <span class="required">*</span> <span class="hint">（AivisSpeech 上での表示名）</span></label>
+        <input type="text" id="modelName" placeholder="例: 阿蘇男性ボイス" maxlength="80">
+      </div>
+      <div class="field">
+        <label>説明 <span class="hint">（省略可・140文字以内）</span></label>
+        <textarea id="description" maxlength="140" placeholder="モデルの説明"></textarea>
+      </div>
+      <div class="field">
+        <label>制作者 <span class="hint">（省略可・カンマ区切り）</span></label>
+        <input type="text" id="creators" placeholder="例: 山田太郎, Jane Doe">
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>モデルアーキテクチャ</label>
+        <select id="architecture">
+          <option value="Style-Bert-VITS2 (JP-Extra)">Style-Bert-VITS2 (JP-Extra)（日本語専用・推奨）</option>
+          <option value="Style-Bert-VITS2">Style-Bert-VITS2（日英中対応）</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Step 3: 話者・スタイル -->
+    <div class="card">
+      <div class="card-title">
+        <span class="step-badge">3</span>
+        話者・スタイルを設定
+      </div>
+      <div id="speakersContainer"></div>
+      <button class="btn-add-speaker" onclick="addSpeaker()">＋ 話者を追加</button>
+    </div>
+
+    <!-- 変換ボタン -->
+    <div class="convert-area">
+      <button id="convertBtn" onclick="doConvert()">変換する</button>
+    </div>
+
+    <!-- 結果カード -->
+    <div class="result-card" id="resultCard">
+      <h3>✅ 変換完了</h3>
+      <p id="resultInfo"></p>
+      <a id="downloadLink" class="download-btn" href="#">📥 .aivmx をダウンロード</a>
+    </div>
+
+    <!-- エラーカード -->
+    <div class="error-card" id="errorCard">
+      <strong>⚠️ エラーが発生しました</strong>
+      <pre id="errorMsg"></pre>
+    </div>
+
+  </div><!-- #mainUI -->
+
+</div><!-- .container -->
 
 <script>
-// ---- 設定管理 ----
+// ═══════════════════════════════
+//  Config
+// ═══════════════════════════════
 function getConfig() {
   return {
     apiUrl: localStorage.getItem('sbv2_api_url') || '',
     apiKey: localStorage.getItem('sbv2_api_key') || '',
   };
 }
+
 function isConfigured() {
   const c = getConfig();
-  return c.apiUrl && c.apiKey;
+  return !!(c.apiUrl && c.apiKey);
 }
+
 function openSettings() {
   const c = getConfig();
   document.getElementById('settingsApiUrl').value = c.apiUrl;
   document.getElementById('settingsApiKey').value = c.apiKey;
   document.getElementById('settingsModal').classList.add('visible');
 }
+
 function closeSettings() {
   document.getElementById('settingsModal').classList.remove('visible');
 }
+
 async function saveSettings() {
   const url = document.getElementById('settingsApiUrl').value.trim().replace(/\/$/, '');
   const key = document.getElementById('settingsApiKey').value.trim();
@@ -411,7 +844,9 @@ async function saveSettings() {
   await init();
 }
 
-// ---- API ヘルパー ----
+// ═══════════════════════════════
+//  API helper
+// ═══════════════════════════════
 async function apiFetch(path, options = {}) {
   const { apiUrl, apiKey } = getConfig();
   const res = await fetch(apiUrl + path, {
@@ -429,25 +864,192 @@ async function apiFetch(path, options = {}) {
   return res;
 }
 
-// ---- 接続確認 ----
+// ═══════════════════════════════
+//  Connection check
+// ═══════════════════════════════
 async function checkConnection() {
   const statusEl = document.getElementById('apiStatus');
-  const textEl = document.getElementById('apiStatusText');
+  const textEl   = document.getElementById('apiStatusText');
   try {
     await apiFetch('/health');
     statusEl.className = 'api-status ok';
-    textEl.textContent = getConfig().apiUrl;
+    const url = getConfig().apiUrl.replace(/^https?:\/\//, '');
+    textEl.textContent = url.length > 28 ? url.slice(0, 28) + '…' : url;
     return true;
   } catch {
-    statusEl.className = 'api-status error';
+    statusEl.className = 'api-status err';
     textEl.textContent = '接続失敗';
     return false;
   }
 }
 
-// ---- 初期化 ----
-let speakerCount = 0;
-let currentModels = [];
+// ═══════════════════════════════
+//  Combobox
+// ═══════════════════════════════
+let currentModels    = [];
+let selectedDirName  = '';
+let comboActiveIndex = -1;
+
+function renderDropdown(query) {
+  const dd = document.getElementById('comboDropdown');
+  const q  = query.trim().toLowerCase();
+
+  let items = currentModels;
+  if (q) {
+    items = currentModels.filter(m => m.dir_name.toLowerCase().includes(q));
+  }
+
+  if (items.length === 0) {
+    dd.innerHTML = `<div class="combobox-empty">${q ? '一致するモデルなし' : 'モデルが見つかりません'}</div>`;
+  } else {
+    dd.innerHTML = items.map((m, i) => {
+      const highlighted = q
+        ? m.dir_name.replace(new RegExp(`(${escRe(q)})`, 'gi'), '<em>$1</em>')
+        : esc(m.dir_name);
+      const isSelected = m.dir_name === selectedDirName;
+      return `<div class="combobox-option${isSelected ? ' selected' : ''}"
+                   data-dir="${esc(m.dir_name)}"
+                   data-idx="${i}"
+                   onmousedown="selectModel('${esc(m.dir_name)}')"
+                   onmouseover="setComboActive(${i})">${highlighted}</div>`;
+    }).join('');
+  }
+
+  comboActiveIndex = -1;
+  dd.classList.add('open');
+}
+
+function onComboInput() {
+  const input = document.getElementById('comboboxInput');
+  const val   = input.value;
+  const clear = document.getElementById('comboClear');
+
+  clear.classList.toggle('visible', val.length > 0);
+
+  // ドロップダウンを更新
+  if (currentModels.length > 0) {
+    renderDropdown(val);
+  }
+
+  // 選択解除
+  if (selectedDirName && val !== selectedDirName) {
+    selectedDirName = '';
+    document.getElementById('modelInfo').classList.remove('visible');
+  }
+}
+
+function onComboFocus() {
+  if (currentModels.length > 0) {
+    renderDropdown(document.getElementById('comboboxInput').value);
+  }
+}
+
+function onComboKeyDown(e) {
+  const dd      = document.getElementById('comboDropdown');
+  const options = dd.querySelectorAll('.combobox-option');
+  if (!options.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    comboActiveIndex = Math.min(comboActiveIndex + 1, options.length - 1);
+    updateComboActive(options);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    comboActiveIndex = Math.max(comboActiveIndex - 1, 0);
+    updateComboActive(options);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (comboActiveIndex >= 0 && options[comboActiveIndex]) {
+      selectModel(options[comboActiveIndex].dataset.dir);
+    }
+  } else if (e.key === 'Escape') {
+    closeDropdown();
+    document.getElementById('comboboxInput').blur();
+  }
+}
+
+function setComboActive(i) {
+  comboActiveIndex = i;
+  const dd = document.getElementById('comboDropdown');
+  updateComboActive(dd.querySelectorAll('.combobox-option'));
+}
+
+function updateComboActive(options) {
+  options.forEach((el, i) => {
+    el.classList.toggle('active', i === comboActiveIndex);
+  });
+  if (comboActiveIndex >= 0) {
+    options[comboActiveIndex]?.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function closeDropdown() {
+  document.getElementById('comboDropdown').classList.remove('open');
+}
+
+function clearCombo() {
+  document.getElementById('comboboxInput').value = '';
+  document.getElementById('comboClear').classList.remove('visible');
+  selectedDirName = '';
+  document.getElementById('modelInfo').classList.remove('visible');
+  document.getElementById('speakersContainer').innerHTML = '';
+  speakerCount = 0; styleCounters = {};
+  closeDropdown();
+  document.getElementById('comboboxInput').focus();
+}
+
+function selectModel(dirName) {
+  const model = currentModels.find(m => m.dir_name === dirName);
+  if (!model) return;
+
+  selectedDirName = dirName;
+  document.getElementById('comboboxInput').value = dirName;
+  document.getElementById('comboClear').classList.add('visible');
+  closeDropdown();
+
+  // モデル名を自動入力（空の時のみ）
+  if (!document.getElementById('modelName').value) {
+    document.getElementById('modelName').value = dirName;
+  }
+
+  // アーキテクチャを自動設定
+  if (model.architecture) {
+    document.getElementById('architecture').value = model.architecture;
+  }
+
+  // モデル情報バッジ
+  const infoEl = document.getElementById('modelInfo');
+  const flags = [
+    model.has_config       ? '✅ config.json'        : '❌ config.json なし',
+    model.has_style_vectors ? '✅ style_vectors.npy' : '❌ style_vectors.npy なし',
+  ].join('　');
+  const spkLine = model.speakers.length
+    ? `<div style="margin-top:4px;font-size:0.72rem">話者: ${esc(model.speakers.join(', '))}</div>`
+    : '';
+  infoEl.innerHTML = `<div>${flags}</div>${spkLine}`;
+  infoEl.classList.add('visible');
+
+  // 話者リストをリセットして自動追加
+  document.getElementById('speakersContainer').innerHTML = '';
+  speakerCount = 0; styleCounters = {};
+  if (model.speakers.length > 0) {
+    model.speakers.forEach((name, i) => addSpeaker(name, i));
+  } else {
+    addSpeaker('', 0);
+  }
+}
+
+// 外クリックでドロップダウンを閉じる
+document.addEventListener('click', e => {
+  if (!document.getElementById('comboboxWrap').contains(e.target)) {
+    closeDropdown();
+  }
+});
+
+// ═══════════════════════════════
+//  Init
+// ═══════════════════════════════
+let speakerCount  = 0;
 let styleCounters = {};
 
 async function init() {
@@ -464,62 +1066,43 @@ async function init() {
 }
 
 async function loadModels() {
-  const sel = document.getElementById('modelSelect');
+  const input = document.getElementById('comboboxInput');
+  input.placeholder = '読み込み中...';
+  input.disabled = true;
   try {
-    const res = await apiFetch('/api/models');
+    const res  = await apiFetch('/api/models');
     const data = await res.json();
-    if (data.error) { sel.innerHTML = `<option value="">${data.error}</option>`; return; }
-    currentModels = data.models || [];
-    if (currentModels.length === 0) {
-      sel.innerHTML = '<option value="">モデルが見つかりません</option>';
+    if (data.error) {
+      input.placeholder = data.error;
       return;
     }
-    sel.innerHTML = '<option value="">--- 選択してください ---</option>' +
-      currentModels.map(m => `<option value="${esc(m.dir_name)}">${esc(m.dir_name)}</option>`).join('');
+    currentModels = data.models || [];
+    if (currentModels.length === 0) {
+      input.placeholder = 'モデルが見つかりません';
+    } else {
+      input.placeholder = `モデルを検索・選択（${currentModels.length} 件）...`;
+    }
   } catch (e) {
-    sel.innerHTML = `<option value="">読み込み失敗: ${esc(e.message)}</option>`;
+    input.placeholder = `読み込み失敗: ${e.message}`;
+  } finally {
+    input.disabled = false;
   }
 }
 
-function onModelSelect() {
-  const dirName = document.getElementById('modelSelect').value;
-  const infoEl = document.getElementById('modelInfo');
-  if (!dirName) { infoEl.classList.remove('visible'); return; }
-  const model = currentModels.find(m => m.dir_name === dirName);
-  if (!model) return;
-
-  if (!document.getElementById('modelName').value) {
-    document.getElementById('modelName').value = dirName;
-  }
-  document.getElementById('architecture').value = model.architecture || 'Style-Bert-VITS2 (JP-Extra)';
-
-  const flags = [
-    model.has_config ? '✅ config.json' : '❌ config.json なし',
-    model.has_style_vectors ? '✅ style_vectors.npy' : '❌ style_vectors.npy なし',
-  ].join('　');
-  infoEl.innerHTML = `<div>${flags}</div>${model.speakers.length ? `<div style="margin-top:6px;font-size:12px;color:#555">話者: ${esc(model.speakers.join(', '))}</div>` : ''}`;
-  infoEl.classList.add('visible');
-
-  document.getElementById('speakersContainer').innerHTML = '';
-  speakerCount = 0; styleCounters = {};
-  if (model.speakers.length > 0) {
-    model.speakers.forEach((name, i) => addSpeaker(name, i));
-  } else {
-    addSpeaker('', 0);
-  }
-}
-
+// ═══════════════════════════════
+//  Speaker / Style management
+// ═══════════════════════════════
 function addSpeaker(defaultName = '', localId = null) {
   const container = document.getElementById('speakersContainer');
   const idx = speakerCount++;
-  const id = localId !== null ? localId : idx;
+  const id  = localId !== null ? localId : idx;
   const block = document.createElement('div');
   block.className = 'speaker-block';
   block.id = `speaker-${idx}`;
   block.innerHTML = `
     <div class="speaker-block-header">
       <span class="speaker-block-title">話者 ${idx + 1}</span>
-      <button class="btn-danger btn-sm" onclick="removeSpeaker(${idx})">削除</button>
+      <button class="btn-danger" onclick="removeSpeaker(${idx})">削除</button>
     </div>
     <div class="field">
       <label>話者名 <span class="required">*</span></label>
@@ -529,7 +1112,7 @@ function addSpeaker(defaultName = '', localId = null) {
       <label>local_id <span class="hint">（通常は変更不要）</span></label>
       <input type="text" id="speaker-localid-${idx}" value="${id}" style="max-width:100px">
     </div>
-    <div class="field">
+    <div class="field" style="margin-bottom:0">
       <label>スタイル <span class="required">*</span></label>
       <div class="styles-list" id="styles-${idx}"></div>
       <button class="btn-add-style" onclick="addStyle(${idx})">＋ スタイルを追加</button>
@@ -545,39 +1128,42 @@ function removeSpeaker(idx) {
 
 function addStyle(speakerIdx, defaultName = '') {
   if (!styleCounters[speakerIdx]) styleCounters[speakerIdx] = 0;
-  const si = styleCounters[speakerIdx]++;
+  const si   = styleCounters[speakerIdx]++;
   const list = document.getElementById(`styles-${speakerIdx}`);
-  const row = document.createElement('div');
+  const row  = document.createElement('div');
   row.className = 'style-row';
   row.id = `style-${speakerIdx}-${si}`;
   row.innerHTML = `
     <input type="text" id="style-name-${speakerIdx}-${si}" value="${esc(defaultName)}" placeholder="例: ニュートラル" maxlength="20">
     <span class="local-id-label">ID: ${si}</span>
-    <button class="btn-secondary btn-sm" onclick="document.getElementById('style-${speakerIdx}-${si}').remove()">×</button>
+    <button class="btn-ghost" style="padding:0.35rem 0.65rem;font-size:0.72rem" onclick="document.getElementById('style-${speakerIdx}-${si}').remove()">×</button>
   `;
   list.appendChild(row);
 }
 
+// ═══════════════════════════════
+//  Collect & Validate
+// ═══════════════════════════════
 function collectFormData() {
-  const modelDir = document.getElementById('modelSelect').value;
+  const modelDir       = selectedDirName;
   const outputFilename = document.getElementById('outputFilename').value.trim();
-  const modelName = document.getElementById('modelName').value.trim();
-  const description = document.getElementById('description').value.trim();
-  const creatorsRaw = document.getElementById('creators').value.trim();
-  const architecture = document.getElementById('architecture').value;
+  const modelName      = document.getElementById('modelName').value.trim();
+  const description    = document.getElementById('description').value.trim();
+  const creatorsRaw    = document.getElementById('creators').value.trim();
+  const architecture   = document.getElementById('architecture').value;
   const creators = creatorsRaw ? creatorsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
 
   const speakers = [];
   document.querySelectorAll('.speaker-block').forEach(block => {
     const idx = block.id.match(/speaker-(\d+)/)?.[1];
-    if (!idx) return;
-    const name = document.getElementById(`speaker-name-${idx}`)?.value.trim() || '';
+    if (idx == null) return;
+    const name    = document.getElementById(`speaker-name-${idx}`)?.value.trim() || '';
     const localId = parseInt(document.getElementById(`speaker-localid-${idx}`)?.value || '0', 10);
-    const styles = [];
+    const styles  = [];
     let lid = 0;
     block.querySelectorAll('.style-row').forEach(row => {
       const si = row.id.match(/style-\d+-(\d+)/)?.[1];
-      if (!si) return;
+      if (si == null) return;
       const sName = document.getElementById(`style-name-${idx}-${si}`)?.value.trim() || '';
       if (sName) styles.push({ name: sName, local_id: lid++ });
     });
@@ -588,52 +1174,57 @@ function collectFormData() {
 }
 
 function validate(d) {
-  if (!d.modelDir) return 'モデルを選択してください';
-  if (!d.modelName) return 'モデル名を入力してください';
+  if (!d.modelDir)             return 'モデルを選択してください';
+  if (!d.modelName)            return 'モデル名を入力してください';
   if (d.speakers.length === 0) return '話者を1人以上追加してください';
   for (const spk of d.speakers) {
-    if (!spk.name) return '話者名を入力してください';
+    if (!spk.name)               return '話者名を入力してください';
     if (spk.styles.length === 0) return `話者「${spk.name}」にスタイルを1つ以上追加してください`;
   }
   return null;
 }
 
+// ═══════════════════════════════
+//  Convert
+// ═══════════════════════════════
 async function doConvert() {
-  const btn = document.getElementById('convertBtn');
-  document.getElementById('resultCard').classList.remove('visible');
-  document.getElementById('errorCard').classList.remove('visible');
+  const btn     = document.getElementById('convertBtn');
+  const resultEl = document.getElementById('resultCard');
+  const errorEl  = document.getElementById('errorCard');
+  resultEl.classList.remove('visible');
+  errorEl.classList.remove('visible');
 
   const data = collectFormData();
-  const err = validate(data);
+  const err  = validate(data);
   if (err) {
-    document.getElementById('errorCard').classList.add('visible');
+    errorEl.classList.add('visible');
     document.getElementById('errorMsg').textContent = err;
     return;
   }
 
   btn.disabled = true;
+  btn.classList.add('loading');
   btn.innerHTML = '<span class="spinner"></span>変換中（数分かかる場合があります）...';
 
   try {
     const res = await apiFetch('/api/convert', {
       method: 'POST',
       body: JSON.stringify({
-        model_dir: data.modelDir,
+        model_dir:       data.modelDir,
         output_filename: data.outputFilename,
-        model_name: data.modelName,
-        description: data.description,
-        creators: data.creators,
-        architecture: data.architecture,
-        speakers: data.speakers,
+        model_name:      data.modelName,
+        description:     data.description,
+        creators:        data.creators,
+        architecture:    data.architecture,
+        speakers:        data.speakers,
       }),
     });
     const json = await res.json();
 
     document.getElementById('resultInfo').textContent = `${json.filename}（${json.size_mb} MB）`;
+
     const dlLink = document.getElementById('downloadLink');
-    dlLink.href = getConfig().apiUrl + json.download_url;
-    dlLink.setAttribute('download', json.filename);
-    // ダウンロードリンクにも X-API-Key が必要なので直接アクセスする
+    dlLink.href = '#';
     dlLink.onclick = async (e) => {
       e.preventDefault();
       const r = await apiFetch(json.download_url);
@@ -642,21 +1233,32 @@ async function doConvert() {
       a.href = URL.createObjectURL(blob);
       a.download = json.filename;
       a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     };
 
-    document.getElementById('resultCard').classList.add('visible');
-    document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    resultEl.classList.add('visible');
+    resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
   } catch (e) {
-    document.getElementById('errorCard').classList.add('visible');
+    errorEl.classList.add('visible');
     document.getElementById('errorMsg').textContent = e.message;
   } finally {
     btn.disabled = false;
+    btn.classList.remove('loading');
     btn.innerHTML = '変換する';
   }
 }
 
+// ═══════════════════════════════
+//  Utilities
+// ═══════════════════════════════
 function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // モーダル外クリックで閉じる
