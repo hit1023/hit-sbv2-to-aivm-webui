@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SBV2 → AIVMX 変換ツール</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+      position: relative;
+    }
+    header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+    header p { margin-top: 6px; font-size: 13px; color: #6e6e73; }
+
+    .settings-btn {
+      position: absolute;
+      right: 0;
+      top: 0;
+      background: none;
+      border: 1.5px solid #d2d2d7;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #3a3a3c;
+    }
+    .settings-btn:hover { background: #f2f2f7; }
+
+    .api-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #6e6e73;
+      margin-top: 8px;
+    }
+    .api-status .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #c7c7cc;
+    }
+    .api-status.ok .dot { background: #34c759; }
+    .api-status.error .dot { background: #ff3b30; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.visible { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px;
+      width: 100%;
+      max-width: 440px;
+      margin: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
+    .modal h2 { font-size: 17px; margin-bottom: 20px; }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      margin: 0 auto 20px;
+      max-width: 680px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .card h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #6e6e73;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h2 .step-num {
+      background: #0071e3;
+      color: #fff;
+      border-radius: 50%;
+      width: 22px; height: 22px;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #3a3a3c;
+      margin-bottom: 6px;
+    }
+    label .required { color: #ff3b30; margin-left: 2px; }
+    label .hint { font-weight: 400; color: #8e8e93; font-size: 12px; margin-left: 4px; }
+
+    input[type="text"], input[type="password"], input[type="url"], textarea, select {
+      width: 100%;
+      border: 1.5px solid #d2d2d7;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #fafafa;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: #0071e3;
+      background: #fff;
+    }
+    textarea { resize: vertical; min-height: 64px; }
+    .field { margin-bottom: 16px; }
+    .field:last-child { margin-bottom: 0; }
+
+    .model-info {
+      background: #f0f7ff;
+      border: 1px solid #b3d4ff;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13px;
+      margin-top: 10px;
+      display: none;
+    }
+    .model-info.visible { display: block; }
+
+    .speaker-block {
+      border: 1.5px solid #e5e5ea;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .speaker-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .speaker-block-title { font-size: 14px; font-weight: 600; color: #3a3a3c; }
+
+    .style-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .style-row input { flex: 1; }
+    .style-row .local-id-label { font-size: 12px; color: #8e8e93; white-space: nowrap; min-width: 48px; }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      font-weight: 500;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    button:active { opacity: 0.75; }
+    .btn-primary { background: #0071e3; color: #fff; }
+    .btn-primary:hover { background: #0077ed; }
+    .btn-secondary { background: #e5e5ea; color: #3a3a3c; }
+    .btn-secondary:hover { background: #d8d8de; }
+    .btn-danger { background: #fff0f0; color: #ff3b30; border: 1px solid #ffcdd0; }
+    .btn-danger:hover { background: #ffe5e5; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    .btn-add-style {
+      margin-top: 4px;
+      background: #f2f2f7;
+      color: #0071e3;
+      border: 1.5px dashed #b3d4ff;
+      width: 100%;
+    }
+    .btn-add-style:hover { background: #e8f0fd; }
+    .btn-add-speaker {
+      width: 100%;
+      margin-top: 4px;
+      background: #f2f2f7;
+      color: #0071e3;
+      border: 1.5px dashed #b3d4ff;
+      padding: 12px;
+    }
+    .btn-add-speaker:hover { background: #e8f0fd; }
+
+    .convert-area { text-align: center; max-width: 680px; margin: 0 auto; }
+    #convertBtn {
+      background: #0071e3;
+      color: #fff;
+      padding: 14px 40px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 320px;
+    }
+    #convertBtn:hover { background: #0077ed; }
+    #convertBtn:disabled { background: #c7c7cc; cursor: not-allowed; }
+
+    .result-card {
+      display: none;
+      background: #f0fff4;
+      border: 1.5px solid #a3e6b3;
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+      max-width: 680px;
+      margin: 20px auto 0;
+    }
+    .result-card.visible { display: block; }
+    .result-card h3 { font-size: 18px; margin-bottom: 8px; color: #1d6b35; }
+    .result-card p { font-size: 13px; color: #4a7c59; margin-bottom: 16px; }
+    .download-btn {
+      display: inline-block;
+      background: #34c759;
+      color: #fff;
+      padding: 12px 28px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .download-btn:hover { background: #2db34a; }
+
+    .error-card {
+      display: none;
+      background: #fff5f5;
+      border: 1.5px solid #ffcdd0;
+      border-radius: 12px;
+      padding: 16px;
+      max-width: 680px;
+      margin: 16px auto 0;
+    }
+    .error-card.visible { display: block; }
+    .error-card pre { font-size: 12px; color: #c0392b; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
+
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .not-configured {
+      text-align: center;
+      padding: 48px 24px;
+      color: #6e6e73;
+    }
+    .not-configured h2 { font-size: 18px; color: #1d1d1f; margin-bottom: 8px; }
+    .not-configured p { font-size: 14px; margin-bottom: 24px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>SBV2 → AIVMX 変換ツール</h1>
+  <p>Style-Bert-VITS2 の学習済みモデルを AivisSpeech 用の .aivmx 形式に変換します</p>
+  <div id="apiStatus" class="api-status"><span class="dot"></span><span id="apiStatusText">未接続</span></div>
+  <button class="settings-btn" onclick="openSettings()">⚙ 設定</button>
+</header>
+
+<!-- 設定モーダル -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>⚙ API 接続設定</h2>
+    <div class="field">
+      <label>API URL <span class="required">*</span></label>
+      <input type="url" id="settingsApiUrl" placeholder="https://example.com">
+    </div>
+    <div class="field">
+      <label>API キー <span class="required">*</span></label>
+      <input type="password" id="settingsApiKey" placeholder="your-api-key">
+    </div>
+    <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end">
+      <button class="btn-secondary" onclick="closeSettings()">キャンセル</button>
+      <button class="btn-primary" onclick="saveSettings()">保存して接続</button>
+    </div>
+  </div>
+</div>
+
+<!-- 未設定メッセージ -->
+<div class="not-configured" id="notConfigured" style="display:none">
+  <h2>API 設定が必要です</h2>
+  <p>右上の「⚙ 設定」から API URL と API キーを設定してください。</p>
+  <button class="btn-primary" onclick="openSettings()">設定を開く</button>
+</div>
+
+<!-- メインUI -->
+<div id="mainUI" style="display:none">
+
+  <!-- Step 1 -->
+  <div class="card">
+    <h2><span class="step-num">1</span> モデルを選択</h2>
+    <div class="field">
+      <label>SBV2 モデル</label>
+      <select id="modelSelect" onchange="onModelSelect()">
+        <option value="">読み込み中...</option>
+      </select>
+      <div class="model-info" id="modelInfo"></div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card">
+    <h2><span class="step-num">2</span> メタデータを入力</h2>
+    <div class="field">
+      <label>出力ファイル名 <span class="hint">（省略時はディレクトリ名・.aivmx は自動付与）</span></label>
+      <input type="text" id="outputFilename" placeholder="例: aso_male_v1">
+    </div>
+    <div class="field">
+      <label>モデル名 <span class="required">*</span> <span class="hint">（AivisSpeech 上での表示名）</span></label>
+      <input type="text" id="modelName" placeholder="例: 阿蘇男性ボイス" maxlength="80">
+    </div>
+    <div class="field">
+      <label>説明 <span class="hint">（省略可・140文字以内）</span></label>
+      <textarea id="description" maxlength="140" placeholder="モデルの説明"></textarea>
+    </div>
+    <div class="field">
+      <label>制作者 <span class="hint">（省略可・カンマ区切り）</span></label>
+      <input type="text" id="creators" placeholder="例: 山田太郎, Jane Doe">
+    </div>
+    <div class="field">
+      <label>モデルアーキテクチャ</label>
+      <select id="architecture">
+        <option value="Style-Bert-VITS2 (JP-Extra)">Style-Bert-VITS2 (JP-Extra)（日本語専用・推奨）</option>
+        <option value="Style-Bert-VITS2">Style-Bert-VITS2（日英中対応）</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="card">
+    <h2><span class="step-num">3</span> 話者・スタイルを設定</h2>
+    <div id="speakersContainer"></div>
+    <button class="btn-add-speaker" onclick="addSpeaker()">＋ 話者を追加</button>
+  </div>
+
+  <!-- 変換ボタン -->
+  <div class="convert-area">
+    <button id="convertBtn" onclick="doConvert()">変換する</button>
+  </div>
+
+  <!-- 結果 -->
+  <div class="result-card" id="resultCard">
+    <h3>✅ 変換完了</h3>
+    <p id="resultInfo"></p>
+    <a id="downloadLink" class="download-btn" href="#">📥 .aivmx ファイルをダウンロード</a>
+  </div>
+
+  <div class="error-card" id="errorCard">
+    <strong>⚠️ エラーが発生しました</strong>
+    <pre id="errorMsg"></pre>
+  </div>
+
+</div><!-- #mainUI -->
+
+<script>
+// ---- 設定管理 ----
+function getConfig() {
+  return {
+    apiUrl: localStorage.getItem('sbv2_api_url') || '',
+    apiKey: localStorage.getItem('sbv2_api_key') || '',
+  };
+}
+function isConfigured() {
+  const c = getConfig();
+  return c.apiUrl && c.apiKey;
+}
+function openSettings() {
+  const c = getConfig();
+  document.getElementById('settingsApiUrl').value = c.apiUrl;
+  document.getElementById('settingsApiKey').value = c.apiKey;
+  document.getElementById('settingsModal').classList.add('visible');
+}
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('visible');
+}
+async function saveSettings() {
+  const url = document.getElementById('settingsApiUrl').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('settingsApiKey').value.trim();
+  if (!url || !key) { alert('URL と API キーを入力してください'); return; }
+  localStorage.setItem('sbv2_api_url', url);
+  localStorage.setItem('sbv2_api_key', key);
+  closeSettings();
+  await init();
+}
+
+// ---- API ヘルパー ----
+async function apiFetch(path, options = {}) {
+  const { apiUrl, apiKey } = getConfig();
+  const res = await fetch(apiUrl + path, {
+    ...options,
+    headers: {
+      'X-API-Key': apiKey,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || JSON.stringify(err));
+  }
+  return res;
+}
+
+// ---- 接続確認 ----
+async function checkConnection() {
+  const statusEl = document.getElementById('apiStatus');
+  const textEl = document.getElementById('apiStatusText');
+  try {
+    await apiFetch('/health');
+    statusEl.className = 'api-status ok';
+    textEl.textContent = getConfig().apiUrl;
+    return true;
+  } catch {
+    statusEl.className = 'api-status error';
+    textEl.textContent = '接続失敗';
+    return false;
+  }
+}
+
+// ---- 初期化 ----
+let speakerCount = 0;
+let currentModels = [];
+let styleCounters = {};
+
+async function init() {
+  if (!isConfigured()) {
+    document.getElementById('notConfigured').style.display = 'block';
+    document.getElementById('mainUI').style.display = 'none';
+    return;
+  }
+  document.getElementById('notConfigured').style.display = 'none';
+  document.getElementById('mainUI').style.display = 'block';
+
+  const ok = await checkConnection();
+  if (ok) await loadModels();
+}
+
+async function loadModels() {
+  const sel = document.getElementById('modelSelect');
+  try {
+    const res = await apiFetch('/api/models');
+    const data = await res.json();
+    if (data.error) { sel.innerHTML = `<option value="">${data.error}</option>`; return; }
+    currentModels = data.models || [];
+    if (currentModels.length === 0) {
+      sel.innerHTML = '<option value="">モデルが見つかりません</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">--- 選択してください ---</option>' +
+      currentModels.map(m => `<option value="${esc(m.dir_name)}">${esc(m.dir_name)}</option>`).join('');
+  } catch (e) {
+    sel.innerHTML = `<option value="">読み込み失敗: ${esc(e.message)}</option>`;
+  }
+}
+
+function onModelSelect() {
+  const dirName = document.getElementById('modelSelect').value;
+  const infoEl = document.getElementById('modelInfo');
+  if (!dirName) { infoEl.classList.remove('visible'); return; }
+  const model = currentModels.find(m => m.dir_name === dirName);
+  if (!model) return;
+
+  if (!document.getElementById('modelName').value) {
+    document.getElementById('modelName').value = dirName;
+  }
+  document.getElementById('architecture').value = model.architecture || 'Style-Bert-VITS2 (JP-Extra)';
+
+  const flags = [
+    model.has_config ? '✅ config.json' : '❌ config.json なし',
+    model.has_style_vectors ? '✅ style_vectors.npy' : '❌ style_vectors.npy なし',
+  ].join('　');
+  infoEl.innerHTML = `<div>${flags}</div>${model.speakers.length ? `<div style="margin-top:6px;font-size:12px;color:#555">話者: ${esc(model.speakers.join(', '))}</div>` : ''}`;
+  infoEl.classList.add('visible');
+
+  document.getElementById('speakersContainer').innerHTML = '';
+  speakerCount = 0; styleCounters = {};
+  if (model.speakers.length > 0) {
+    model.speakers.forEach((name, i) => addSpeaker(name, i));
+  } else {
+    addSpeaker('', 0);
+  }
+}
+
+function addSpeaker(defaultName = '', localId = null) {
+  const container = document.getElementById('speakersContainer');
+  const idx = speakerCount++;
+  const id = localId !== null ? localId : idx;
+  const block = document.createElement('div');
+  block.className = 'speaker-block';
+  block.id = `speaker-${idx}`;
+  block.innerHTML = `
+    <div class="speaker-block-header">
+      <span class="speaker-block-title">話者 ${idx + 1}</span>
+      <button class="btn-danger btn-sm" onclick="removeSpeaker(${idx})">削除</button>
+    </div>
+    <div class="field">
+      <label>話者名 <span class="required">*</span></label>
+      <input type="text" id="speaker-name-${idx}" value="${esc(defaultName)}" placeholder="例: 阿蘇 凛" maxlength="80">
+    </div>
+    <div class="field">
+      <label>local_id <span class="hint">（通常は変更不要）</span></label>
+      <input type="text" id="speaker-localid-${idx}" value="${id}" style="max-width:100px">
+    </div>
+    <div class="field">
+      <label>スタイル <span class="required">*</span></label>
+      <div class="styles-list" id="styles-${idx}"></div>
+      <button class="btn-add-style" onclick="addStyle(${idx})">＋ スタイルを追加</button>
+    </div>
+  `;
+  container.appendChild(block);
+  addStyle(idx, 'ニュートラル');
+}
+
+function removeSpeaker(idx) {
+  document.getElementById(`speaker-${idx}`)?.remove();
+}
+
+function addStyle(speakerIdx, defaultName = '') {
+  if (!styleCounters[speakerIdx]) styleCounters[speakerIdx] = 0;
+  const si = styleCounters[speakerIdx]++;
+  const list = document.getElementById(`styles-${speakerIdx}`);
+  const row = document.createElement('div');
+  row.className = 'style-row';
+  row.id = `style-${speakerIdx}-${si}`;
+  row.innerHTML = `
+    <input type="text" id="style-name-${speakerIdx}-${si}" value="${esc(defaultName)}" placeholder="例: ニュートラル" maxlength="20">
+    <span class="local-id-label">ID: ${si}</span>
+    <button class="btn-secondary btn-sm" onclick="document.getElementById('style-${speakerIdx}-${si}').remove()">×</button>
+  `;
+  list.appendChild(row);
+}
+
+function collectFormData() {
+  const modelDir = document.getElementById('modelSelect').value;
+  const outputFilename = document.getElementById('outputFilename').value.trim();
+  const modelName = document.getElementById('modelName').value.trim();
+  const description = document.getElementById('description').value.trim();
+  const creatorsRaw = document.getElementById('creators').value.trim();
+  const architecture = document.getElementById('architecture').value;
+  const creators = creatorsRaw ? creatorsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const speakers = [];
+  document.querySelectorAll('.speaker-block').forEach(block => {
+    const idx = block.id.match(/speaker-(\d+)/)?.[1];
+    if (!idx) return;
+    const name = document.getElementById(`speaker-name-${idx}`)?.value.trim() || '';
+    const localId = parseInt(document.getElementById(`speaker-localid-${idx}`)?.value || '0', 10);
+    const styles = [];
+    let lid = 0;
+    block.querySelectorAll('.style-row').forEach(row => {
+      const si = row.id.match(/style-\d+-(\d+)/)?.[1];
+      if (!si) return;
+      const sName = document.getElementById(`style-name-${idx}-${si}`)?.value.trim() || '';
+      if (sName) styles.push({ name: sName, local_id: lid++ });
+    });
+    if (name) speakers.push({ name, local_id: localId, styles });
+  });
+
+  return { modelDir, outputFilename, modelName, description, creators, architecture, speakers };
+}
+
+function validate(d) {
+  if (!d.modelDir) return 'モデルを選択してください';
+  if (!d.modelName) return 'モデル名を入力してください';
+  if (d.speakers.length === 0) return '話者を1人以上追加してください';
+  for (const spk of d.speakers) {
+    if (!spk.name) return '話者名を入力してください';
+    if (spk.styles.length === 0) return `話者「${spk.name}」にスタイルを1つ以上追加してください`;
+  }
+  return null;
+}
+
+async function doConvert() {
+  const btn = document.getElementById('convertBtn');
+  document.getElementById('resultCard').classList.remove('visible');
+  document.getElementById('errorCard').classList.remove('visible');
+
+  const data = collectFormData();
+  const err = validate(data);
+  if (err) {
+    document.getElementById('errorCard').classList.add('visible');
+    document.getElementById('errorMsg').textContent = err;
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>変換中（数分かかる場合があります）...';
+
+  try {
+    const res = await apiFetch('/api/convert', {
+      method: 'POST',
+      body: JSON.stringify({
+        model_dir: data.modelDir,
+        output_filename: data.outputFilename,
+        model_name: data.modelName,
+        description: data.description,
+        creators: data.creators,
+        architecture: data.architecture,
+        speakers: data.speakers,
+      }),
+    });
+    const json = await res.json();
+
+    document.getElementById('resultInfo').textContent = `${json.filename}（${json.size_mb} MB）`;
+    const dlLink = document.getElementById('downloadLink');
+    dlLink.href = getConfig().apiUrl + json.download_url;
+    dlLink.setAttribute('download', json.filename);
+    // ダウンロードリンクにも X-API-Key が必要なので直接アクセスする
+    dlLink.onclick = async (e) => {
+      e.preventDefault();
+      const r = await apiFetch(json.download_url);
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = json.filename;
+      a.click();
+    };
+
+    document.getElementById('resultCard').classList.add('visible');
+    document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (e) {
+    document.getElementById('errorCard').classList.add('visible');
+    document.getElementById('errorMsg').textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '変換する';
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// モーダル外クリックで閉じる
+document.getElementById('settingsModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeSettings();
+});
+
+init();
+</script>
+</body>
+</html>
