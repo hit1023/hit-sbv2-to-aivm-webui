@@ -806,6 +806,57 @@
 
   </div><!-- #mainUI -->
 
+  <!-- ===== 文字起こしセクション ===== -->
+  <div class="card" id="transcribeSection" style="margin-top:2rem;">
+    <div class="card-title">🎤 音声文字起こし（GPU / faster-whisper）</div>
+
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;align-items:flex-end;">
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:0.75rem;color:var(--text-muted);">モデル</label>
+        <select id="txModel" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 12px;font-size:0.85rem;">
+          <option value="tiny">tiny（最速）</option>
+          <option value="small">small（高速）</option>
+          <option value="medium">medium（標準）</option>
+          <option value="large-v3" selected>large-v3（高精度）</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <label style="font-size:0.75rem;color:var(--text-muted);">言語</label>
+        <select id="txLang" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 12px;font-size:0.85rem;">
+          <option value="ja" selected>日本語</option>
+          <option value="en">英語</option>
+          <option value="">自動検出</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ドロップゾーン -->
+    <div id="txDropZone"
+      ondragover="txDragOver(event)" ondragleave="txDragLeave(event)" ondrop="txDrop(event)"
+      onclick="document.getElementById('txFileInput').click()"
+      style="border:2px dashed var(--border);border-radius:10px;padding:2rem;text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s;margin-bottom:1rem;">
+      <div style="font-size:2rem;margin-bottom:0.5rem;">🎵</div>
+      <div style="font-size:0.88rem;color:var(--text-muted);">クリックまたはドラッグ＆ドロップで音声ファイルを選択</div>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem;">WAV / MP3 / M4A / OGG / FLAC 対応</div>
+      <div id="txFileName" style="margin-top:0.6rem;font-size:0.82rem;color:var(--accent);min-height:1.2em;"></div>
+    </div>
+    <input type="file" id="txFileInput" accept="audio/*" style="display:none" onchange="txFileSelected(event)">
+
+    <div style="display:flex;gap:0.8rem;align-items:center;margin-bottom:1rem;">
+      <button class="convert-btn" id="txStartBtn" onclick="txStart()" disabled style="padding:10px 24px;font-size:0.9rem;">🔍 文字起こし開始</button>
+      <span id="txStatus" style="font-size:0.82rem;color:var(--text-muted);"></span>
+    </div>
+
+    <div id="txResultWrap" style="display:none;">
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+        <span style="font-size:0.78rem;color:var(--text-muted);letter-spacing:0.06em;text-transform:uppercase;">文字起こし結果</span>
+        <button onclick="txCopy()" style="margin-left:auto;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text-muted);padding:4px 10px;font-size:0.78rem;cursor:pointer;">📋 コピー</button>
+      </div>
+      <textarea id="txResult" readonly rows="10"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0.8rem;font-size:0.88rem;resize:vertical;line-height:1.8;"></textarea>
+    </div>
+  </div>
+
 </div><!-- .container -->
 
 <script>
@@ -1268,6 +1319,81 @@ document.getElementById('settingsModal').addEventListener('click', e => {
 });
 
 init();
+
+// ═══════════════════════════════
+//  文字起こし
+// ═══════════════════════════════
+let _txFile = null;
+
+function txFileSelected(e) {
+  _txFile = e.target.files[0] || null;
+  _txUpdateFile();
+}
+function txDragOver(e) {
+  e.preventDefault();
+  document.getElementById('txDropZone').style.borderColor = 'var(--accent)';
+  document.getElementById('txDropZone').style.background = 'rgba(79,142,255,0.05)';
+}
+function txDragLeave(e) {
+  document.getElementById('txDropZone').style.borderColor = '';
+  document.getElementById('txDropZone').style.background = '';
+}
+function txDrop(e) {
+  e.preventDefault();
+  txDragLeave(e);
+  const file = e.dataTransfer.files[0];
+  if (file) { _txFile = file; _txUpdateFile(); }
+}
+function _txUpdateFile() {
+  const mb = _txFile ? (_txFile.size / 1024 / 1024).toFixed(1) : 0;
+  document.getElementById('txFileName').textContent = _txFile ? `${_txFile.name}  (${mb} MB)` : '';
+  document.getElementById('txStartBtn').disabled = !_txFile;
+}
+
+async function txStart() {
+  if (!_txFile) return;
+  const { apiUrl, apiKey } = getConfig();
+  if (!apiUrl) { alert('設定からAPIのURLを入力してください'); return; }
+
+  const model = document.getElementById('txModel').value;
+  const lang  = document.getElementById('txLang').value;
+
+  document.getElementById('txStartBtn').disabled = true;
+  document.getElementById('txStatus').textContent = '処理中...（GPU で実行中）';
+  document.getElementById('txResultWrap').style.display = 'none';
+
+  const form = new FormData();
+  form.append('file', _txFile);
+
+  try {
+    const res = await fetch(`${apiUrl}/api/transcribe?model=${encodeURIComponent(model)}&language=${encodeURIComponent(lang)}`, {
+      method: 'POST',
+      headers: { 'X-API-Key': apiKey },
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    document.getElementById('txResult').value = data.text;
+    document.getElementById('txResultWrap').style.display = '';
+    document.getElementById('txStatus').textContent = `✓ 完了  言語: ${data.language}  モデル: ${data.model}`;
+  } catch(e) {
+    document.getElementById('txStatus').textContent = `エラー: ${e.message}`;
+  } finally {
+    document.getElementById('txStartBtn').disabled = false;
+  }
+}
+
+function txCopy() {
+  const text = document.getElementById('txResult').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.currentTarget;
+    btn.textContent = '✓ コピー済み';
+    setTimeout(() => btn.textContent = '📋 コピー', 1500);
+  });
+}
 </script>
 </body>
 </html>
