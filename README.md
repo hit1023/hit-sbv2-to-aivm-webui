@@ -19,8 +19,8 @@
 ## セットアップ & 起動
 
 ```bash
-git clone git@github.com:hit1023/mm-sbv2-to-aivm-webui.git
-cd mm-sbv2-to-aivm-webui
+git clone git@github.com:hit1023/hit-sbv2-to-aivm-webui.git
+cd hit-sbv2-to-aivm-webui
 bash run.sh
 ```
 
