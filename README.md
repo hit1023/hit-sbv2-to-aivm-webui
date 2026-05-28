@@ -1,6 +1,6 @@
-# mm-sbv2-to-aivm-webui
+# hit-sbv2-to-aivm-webui
 
-[mm-sbv2-to-aivm-api](https://github.com/Glue-th/mm-sbv2-to-aivm-api) と連携する WebUI です。  
+[mm-sbv2-to-aivm-api](https://github.com/Glue-th/hit-sbv2-to-aivm-api) と連携する WebUI です。  
 ブラウザから SBV2 モデルを選択・メタデータを入力して `.aivmx` ファイルに変換できます。
 
 ## 概要
@@ -14,7 +14,7 @@
 ## 必要環境
 
 - Docker + Docker Compose
-- 別途 [mm-sbv2-to-aivm-api](https://github.com/Glue-th/mm-sbv2-to-aivm-api) が起動済みであること
+- 別途 [hit-sbv2-to-aivm-api](https://github.com/Glue-th/hit-sbv2-to-aivm-api) が起動済みであること
 
 ## セットアップ & 起動
 
