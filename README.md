@@ -1,6 +1,6 @@
 # hit-sbv2-to-aivm-webui
 
-[mm-sbv2-to-aivm-api](https://github.com/Glue-th/hit-sbv2-to-aivm-api) と連携する WebUI です。  
+[hit-sbv2-to-aivm-api](https://github.com/Glue-th/hit-sbv2-to-aivm-api) と連携する WebUI です。  
 ブラウザから SBV2 モデルを選択・メタデータを入力して `.aivmx` ファイルに変換できます。
 
 ## 概要
